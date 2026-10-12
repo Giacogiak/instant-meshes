@@ -1,7 +1,15 @@
-cmake_minimum_required (VERSION 2.8.3)
+# The "...3.5" upper bound keeps CMake >= 4.0 (which dropped compatibility with
+# policy versions < 3.5) willing to configure this project; older CMake ignores it.
+cmake_minimum_required (VERSION 2.8.3...3.5)
 project(InstantMeshes)
 
 option(INSTANT_MESHES_DEV_MODE "Instant meshes developer mode" OFF)
+option(IM_CORE_ONLY "Only build the GUI-free instantmeshes_core shared library (no NanoGUI/GLFW/OpenGL)" OFF)
+
+# The bundled TBB/NanoGUI CMake files request policy versions < 3.5, which CMake >= 4.0 rejects
+if (NOT CMAKE_VERSION VERSION_LESS 4.0 AND NOT DEFINED CMAKE_POLICY_VERSION_MINIMUM)
+  set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
+endif()
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   message(STATUS "Setting build type to 'Release' as none was specified.")
@@ -11,7 +19,7 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 string(TOUPPER "${CMAKE_BUILD_TYPE}" U_CMAKE_BUILD_TYPE)
 
-if(NOT IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/ext/nanogui/ext/glfw")
+if(NOT IM_CORE_ONLY AND NOT IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/ext/nanogui/ext/glfw")
   message(FATAL_ERROR "The Instant Meshes dependency repositories (NanoGUI, GLFW, etc.) are missing! "
     "You probably did not clone the project with --recursive. It is possible to recover "
     "by calling \"git submodule update --init --recursive\"")
@@ -57,16 +65,24 @@ endif()
 # Enable C++11 mode on GCC / Clang
 if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=gnu++11")
+  # GCC >= 13 rejects the bundled TBB's headers (tbb/task.h) by default
+  include(CheckCXXCompilerFlag)
+  check_cxx_compiler_flag("-Wno-changes-meaning" HAS_WNO_CHANGES_MEANING)
+  if (HAS_WNO_CHANGES_MEANING)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-changes-meaning")
+  endif()
 elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 endif()
 
-# Build NanoGUI
-set(NANOGUI_BUILD_EXAMPLE OFF CACHE BOOL " " FORCE)
-set(NANOGUI_BUILD_SHARED  OFF CACHE BOOL " " FORCE)
-set(NANOGUI_BUILD_PYTHON  OFF CACHE BOOL " " FORCE)
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/ext/nanogui ext_build/nanogui)
-set_property(TARGET nanogui glfw glfw_objects bin2c PROPERTY FOLDER "dependencies")
+if (NOT IM_CORE_ONLY)
+  # Build NanoGUI
+  set(NANOGUI_BUILD_EXAMPLE OFF CACHE BOOL " " FORCE)
+  set(NANOGUI_BUILD_SHARED  OFF CACHE BOOL " " FORCE)
+  set(NANOGUI_BUILD_PYTHON  OFF CACHE BOOL " " FORCE)
+  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/ext/nanogui ext_build/nanogui)
+  set_property(TARGET nanogui glfw glfw_objects bin2c PROPERTY FOLDER "dependencies")
+endif()
 
 # Build TBB
 set(TBB_BUILD_STATIC ON CACHE BOOL " " FORCE)
@@ -77,6 +93,28 @@ set(TBB_BUILD_TESTS OFF CACHE BOOL " " FORCE)
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/ext/tbb ext_build/tbb)
 set_property(TARGET tbb_static tbb_def_files PROPERTY FOLDER "dependencies")
+# tbb_static is also linked into the instantmeshes_core shared library
+set_property(TARGET tbb_static PROPERTY POSITION_INDEPENDENT_CODE ON)
+
+# Eigen (header-only). NanoGUI's bundled copy (Eigen 3.2.9) is used by default so that
+# the core library computes exactly what the GUI build does; only its headers are
+# needed, not the NanoGUI library itself.
+set(IM_EIGEN_INCLUDE_DIR "" CACHE PATH "Directory containing Eigen/Core (default: ext/nanogui/ext/eigen, then find_package(Eigen3))")
+if (NOT IM_EIGEN_INCLUDE_DIR)
+  if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/ext/nanogui/ext/eigen/Eigen/Core")
+    set(IM_EIGEN_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/ext/nanogui/ext/eigen")
+  else()
+    find_package(Eigen3 QUIET NO_MODULE)
+    if (EIGEN3_INCLUDE_DIR)
+      set(IM_EIGEN_INCLUDE_DIR "${EIGEN3_INCLUDE_DIR}")
+    elseif (EIGEN3_INCLUDE_DIRS)
+      set(IM_EIGEN_INCLUDE_DIR "${EIGEN3_INCLUDE_DIRS}")
+    else()
+      message(FATAL_ERROR "Eigen was not found! Either run \"git submodule update --init --recursive ext/nanogui\" "
+        "(only its bundled Eigen headers are used) or set IM_EIGEN_INCLUDE_DIR.")
+    endif()
+  endif()
+endif()
 
 # Compile instant meshes with various compiler warnings turned on
 if(MSVC)
@@ -93,11 +131,17 @@ elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "
 endif()
 
 # Header file directories of dependency libraries
+if (NOT IM_CORE_ONLY)
+  include_directories(
+    # NanoGUI
+    ${CMAKE_CURRENT_SOURCE_DIR}/ext/nanogui/include
+    # NanoGUI dependencies (Eigen, GLFW, NanoVG, GLAD?)
+    ${NANOGUI_EXTRA_INCS}
+  )
+endif()
 include_directories(
-  # NanoGUI
-  ${CMAKE_CURRENT_SOURCE_DIR}/ext/nanogui/include
-  # NanoGUI dependencies (Eigen, GLFW, NanoVG, GLAD?)
-  ${NANOGUI_EXTRA_INCS}
+  # Eigen
+  ${IM_EIGEN_INCLUDE_DIR}
   # Intel Thread Building Blocks
   ${CMAKE_CURRENT_SOURCE_DIR}/ext/tbb/include
   # Disjoint set data structure
@@ -113,6 +157,61 @@ include_directories(
   # Resource file
   ${CMAKE_CURRENT_BINARY_DIR}
 )
+
+if (INSTANT_MESHES_DEV_MODE)
+  add_definitions(-DDEV_MODE)
+endif()
+
+# GUI-free remeshing library with a C API (src/capi.h), e.g. for P/Invoke from .NET
+add_library(instantmeshes_core SHARED
+  src/capi.h src/capi.cpp
+  src/aabb.h
+  src/common.h
+  src/meshio.h src/meshio.cpp
+  src/normal.h src/normal.cpp
+  src/adjacency.h src/adjacency.cpp
+  src/meshstats.h src/meshstats.cpp
+  src/hierarchy.h src/hierarchy.cpp
+  src/extract.h src/extract.cpp
+  src/field.h src/field.cpp
+  src/bvh.h src/bvh.cpp
+  src/subdivide.h src/subdivide.cpp
+  src/reorder.h src/reorder.cpp
+  src/serializer.h src/serializer.cpp
+  src/batch.h src/batch.cpp
+  src/smoothcurve.h src/smoothcurve.cpp
+  src/cleanup.h src/cleanup.cpp
+  src/dedge.h src/dedge.cpp
+  ext/rply/rply.c)
+
+target_link_libraries(instantmeshes_core tbb_static)
+set_target_properties(instantmeshes_core PROPERTIES
+  DEFINE_SYMBOL INSTANTMESHES_CORE_EXPORTS
+  C_VISIBILITY_PRESET hidden
+  CXX_VISIBILITY_PRESET hidden)
+
+if (WIN32)
+  # instantmeshes_core.dll also with MinGW (.NET's DllImport probing adds no "lib" prefix on Windows)
+  set_target_properties(instantmeshes_core PROPERTIES PREFIX "")
+endif()
+if (MSVC)
+  set_source_files_properties(ext/rply/rply.c PROPERTIES COMPILE_FLAGS "/wd4127")
+elseif (NOT APPLE)
+  # Report unresolved symbols at link time and keep the bundled TBB's symbols private
+  set_target_properties(instantmeshes_core PROPERTIES
+    LINK_FLAGS "-Wl,--no-undefined -Wl,--exclude-libs,ALL")
+endif()
+
+# Native test harness for the C API ("ctest" or "test_capi <mesh> <scratch dir>")
+enable_testing()
+add_executable(test_capi tests/test_capi.c)
+target_include_directories(test_capi PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(test_capi instantmeshes_core)
+add_test(NAME test_capi COMMAND test_capi ${CMAKE_CURRENT_SOURCE_DIR}/source.obj ${CMAKE_CURRENT_BINARY_DIR})
+
+if (IM_CORE_ONLY)
+  return()
+endif()
 
 # Run bin2c on resource files
 set(PNG_FILES
@@ -134,10 +233,6 @@ add_custom_command(
   DEPENDS bin2c ${IM_RESOURCES}
   COMMENT "Running bin2c"
   PRE_BUILD VERBATIM)
-
-if (INSTANT_MESHES_DEV_MODE)
-  add_definitions(-DDEV_MODE)
-endif()
 
 # Resource file (icons etc.)
 set(EXTRA_SOURCE "")

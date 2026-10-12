@@ -26,7 +26,8 @@ void batch_process(const std::string &input, const std::string &output,
                    int rosy, int posy, Float scale, int face_count,
                    int vertex_count, Float creaseAngle, bool extrinsic,
                    bool align_to_boundaries, int smooth_iter, int knn_points,
-                   bool pure_quad, bool deterministic) {
+                   bool pure_quad, bool deterministic,
+                   int *out_vertex_count, int *out_face_count) {
     cout << endl;
     cout << "Running in batch mode:" << endl;
     cout << "   Input file             = " << input << endl;
@@ -52,6 +53,9 @@ void batch_process(const std::string &input, const std::string &output,
     std::set<uint32_t> crease_in, crease_out;
     BVH *bvh = nullptr;
     AdjacencyMatrix adj = nullptr;
+
+    /* Release the BVH even if a later stage throws (e.g. an unwritable output path) */
+    struct BVHGuard { BVH *&bvh; ~BVHGuard() { delete bvh; } } bvhGuard { bvh };
 
     /* Load the input mesh */
     load_mesh_or_pointcloud(input, F, V, N);
@@ -208,7 +212,21 @@ void batch_process(const std::string &input, const std::string &output,
             mRes.scale(), crease_out, true, pure_quad, bvh, smooth_iter);
     cout << "Extraction is done. (total time: " << timeString(timer.reset()) << ")" << endl;
 
+    if (out_vertex_count)
+        *out_vertex_count = (int) O_extr.cols();
+    if (out_face_count) {
+        /* Count faces as write_mesh() writes them: an irregular face of a quad-dominant
+           mesh is stored as several degenerate quads (F(2, f) == F(3, f)) that share F(2, f) */
+        std::set<uint32_t> irregular;
+        uint32_t nIrregular = 0;
+        for (uint32_t f=0; f<F_extr.cols(); ++f) {
+            if (F_extr.rows() == 4 && F_extr(2, f) == F_extr(3, f)) {
+                nIrregular++;
+                irregular.insert(F_extr(2, f));
+            }
+        }
+        *out_face_count = (int) (F_extr.cols() - nIrregular + irregular.size());
+    }
+
     write_mesh(output, F_extr, O_extr, MatrixXf(), Nf_extr);
-    if (bvh)
-        delete bvh;
 }
