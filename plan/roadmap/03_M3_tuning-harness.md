@@ -30,6 +30,23 @@ Map the originally-planned CLI flags onto `im_remesh_params` fields:
 > - **`pure_quad = 1` applies one subdivision step**, so the output has ~4× the requested size. Via ctypes, `vertex_count = 11082` with `rosy = posy = 4`, `smooth_iter = 2` and 1 thread gave **V=46322, F=41632**, not ~11k. To land near the target's 11,082 V / 11,054 F in pure-quad mode, the swept `vertex_count` must be anchored near **~2,770 (11,082 / 4)**, not 11,082. Verify the anchor with a trial before the grid.
 > - Library path: `build-core/libinstantmeshes_core.so`. `ctypes.sizeof(im_remesh_params)` is 48 (10 `c_int` + 2 `c_float`, in header order). `im_remesh` logs progress to stdout.
 
+### Weld `source.obj` before sweeping (decision D6, 2026-10-12)
+
+M2.1 found `source.obj` is **40 disconnected components with unwelded seams** (20,017
+boundary vertices, 10,287 pairs coincident within 1e-6). Instant Meshes treats those seams
+as open boundaries, which is very likely why M1's own `vertex_count=11082` trial had 9,512
+boundary edges against the target's 242, plus degenerate/non-manifold faces — probably
+swamping any signal from the swept parameters. **Before Stage 1**, produce a welded copy
+(e.g. `source_welded.obj`, via `trimesh.load(..., process=False)` then
+`merge_vertices(digits_vertex=5)` or equivalent — tune the tolerance so it merges only the
+near-coincident (<1e-6) boundary pairs M2 measured, not unrelated nearby geometry) and feed
+**that** to every `im_remesh` call in the sweep. Keep scoring against the original,
+unwelded `source.obj` and `quad-remeshed.obj` exactly as M2 already does — welding changes
+only what Instant Meshes remeshes, not the fidelity ground truth. Report the welded mesh's
+boundary-edge count (should land near the target's 242, not 9,512) as part of validating
+the weld before using it for the sweep proper, and note the chosen tolerance and its
+justification in the handoff.
+
 - **Swept**: `vertex_count` (anchored near 11,082), `crease_angle` (off, 20°, 30°, 45°, 60°), `smooth_iter` (0, 1, 2, 4).
 - **Fixed**: `posy = 4`, `pure_quad = 1` (matches `quad-remeshed.obj`'s 100%-quad composition), `rosy = 4`.
 - **Always on**: `deterministic = 1` (see above).
@@ -52,5 +69,6 @@ Building `instantmeshes_core` (`IM_CORE_ONLY=ON`) needs only a C/C++ compiler an
 
 ## Exit criteria
 
+- `source.obj` is welded before the sweep (D6); the welded mesh's boundary-edge count is measured and reported, and is substantially closer to the target's 242 than the unwelded mesh's 9,512.
 - After the sweep, re-run the single best parameter set standalone and confirm the logged score matches a fresh scorer invocation (no drift from caching/logging bugs).
 - `scripts/tune_params.py --smoke-test` must run one trial end-to-end and exit 0.

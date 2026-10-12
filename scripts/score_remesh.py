@@ -57,8 +57,8 @@ DEFAULT_SEED = 0
 TERMS = {
     'count_v':   '|dV| / V_target',
     'count_f':   '|dF| / F_target',
-    'angle':     'mean per-face angle deviation / 45 deg',
-    'edge_cv':   'edge-length coefficient of variation',
+    'angle':     '|angle_dev_mean(candidate) - angle_dev_mean(target)| / angle_dev_mean(target)',
+    'edge_cv':   '|edge_cv(candidate) - edge_cv(target)| / edge_cv(target)',
     'valence4':  '|%valence4(candidate) - %valence4(target)| (as a fraction)',
     'fidelity':  '|fidelity_mean(candidate) - fidelity_mean(target)| / fidelity_mean(target)',
     'non_quad':  'non-quad face fraction',
@@ -286,20 +286,29 @@ def clamp01(x):
 
 def aggregate(cand, target, weights):
     cc, tc = cand['counts'], target['counts']
-    cq = cand['quad_quality']
+    cq, tq = cand['quad_quality'], target['quad_quality']
     cv, tv = cand['valence'], target['valence']
     cf, tf = cand['fidelity'], target['fidelity']
 
     def ratio(x, ref):
+        # x == 0 means candidate == target on this metric: a perfect match, cost 0, even
+        # when ref is itself 0 (e.g. a perfectly regular mesh with 0 angle deviation).
+        if x == 0:
+            return 0.0
         return abs(x) / ref if ref else None
 
     v4c, v4t = cv['pct_valence4_interior'], tv['pct_valence4_interior']
+    # angle and edge_cv are scored relative to the target, not minimized toward 0/90deg:
+    # the target itself is adaptive (high edge_cv) and not angle-perfect, so "match Rhino's
+    # style" is the goal here, same as the fidelity term below (decision D4, M2.1 handoff).
     terms = {
         'count_v': ratio(cc['V'] - tc['V'], tc['V']),
         'count_f': ratio(cc['F'] - tc['F'], tc['F']),
-        'angle': (cq['angle_dev_mean_deg'] / 45.0
-                  if cq['angle_dev_mean_deg'] is not None else None),
-        'edge_cv': cq['edge_length_cv'],
+        'angle': (ratio(cq['angle_dev_mean_deg'] - tq['angle_dev_mean_deg'],
+                        tq['angle_dev_mean_deg'])
+                  if cq['angle_dev_mean_deg'] is not None and
+                     tq['angle_dev_mean_deg'] is not None else None),
+        'edge_cv': ratio(cq['edge_length_cv'] - tq['edge_length_cv'], tq['edge_length_cv']),
         'valence4': (abs(v4c - v4t) / 100.0
                      if v4c is not None and v4t is not None else None),
         'fidelity': ratio(cf['mean'] - tf['mean'], tf['mean']),

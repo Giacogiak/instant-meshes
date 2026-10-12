@@ -20,6 +20,12 @@ Standalone, independent of M1 — runs directly against CLI-produced `.obj` file
 > - **Aggregate:** non-quad fraction is included as a 7th equal-weight term ("weighted sum of *the above*"). `--weight non_quad=0` reproduces the 6-term example formula exactly. Each term is clamped to `[0,1]`; 0 = best.
 > - **Exit criterion 2's trial** was produced through the C API (`im_remesh`, 1 thread), because the GUI CLI does not configure under the toolbox's CMake 4.x. M1 showed this is byte-identical to `InstantMeshes -d -t 1`.
 
+**Decided (giacomo forcina, 2026-10-12), resolving the M2.1 handoff's "Judgement calls":**
+- **D3 — `non_quad` term:** keep it as a 7th equal-weight term by default (the implemented behavior). `--weight non_quad=0` remains available to reproduce the plan's literal 6-term example.
+- **D4 — `angle`/`edge_cv` scoring:** changed from absolute cost to relative-to-target (`|x_candidate - x_target| / x_target`), consistent with the fidelity term's existing "match Rhino's result, not minimize toward zero" philosophy. Implemented in `aggregate()`; fixed a related edge case the change exposed (`ratio()` returning `None`→worst-cost when the target's own value is exactly 0, e.g. a perfectly regular test mesh, even when the candidate matches it exactly) — both now correctly score 0 in that case.
+- **D5 — unscored defects** (degenerate quads, boundary/non-manifold edge mismatch, fidelity max tail): left as reported-only diagnostics, not folded into the aggregate, until M3's Stage-1 sweep shows whether the search actually exploits that blind spot.
+- **D6 — source mesh welding:** `source.obj`'s 40 disconnected components with unwelded seams (10,287 near-coincident boundary-vertex pairs) are suspected to dominate the trial's boundary/degenerate-face defects more than any swept parameter. M3 must weld the source before sweeping — see `plan/roadmap/03_M3_tuning-harness.md`.
+
 ### Toolchain note for this unit
 
 System `pip` is not installed and this environment has no preexisting Python virtualenv with `trimesh`/`numpy`/`scipy`. Install and run inside the `instant-meshes-build` toolbox container (see plan-run prompt notes) so `pip install` has a reliable base (`python3-pip` via `dnf`) without needing host `sudo`.
