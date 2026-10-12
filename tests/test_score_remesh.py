@@ -89,6 +89,18 @@ class QuadQuality(TempDirTest):
         self.assertAlmostEqual(q['angle_dev_mean_deg'], 2 * (90 - acute) / 4, places=9)
         self.assertAlmostEqual(q['corner_angle_dev_max_deg'], 90 - acute, places=9)
 
+    def test_degenerate_quads_are_penalized(self):
+        V = np.array([(0, 0, 0), (1, 0, 0), (0, 1, 0)], float)
+        # [a v a b] folds back on itself: 0 deg at v and b, 90 deg at both a's
+        q = S.quad_quality(S.PolyMesh(V, [np.array([0, 1, 0, 2])]))
+        self.assertEqual(q['degenerate_quads'], 1)
+        self.assertAlmostEqual(q['angle_dev_mean_deg'], 45.0, places=9)
+        # Zero-length edge: two corners count as 90 deg off, the others are 45 deg
+        q = S.quad_quality(S.PolyMesh(V, [np.array([0, 0, 1, 2])]))
+        self.assertEqual(q['degenerate_quads'], 1)
+        self.assertAlmostEqual(q['angle_dev_mean_deg'], 67.5, places=9)
+        self.assertAlmostEqual(q['corner_angle_dev_max_deg'], 90.0, places=9)
+
     def test_non_quad_fraction(self):
         V = [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0), (2, 0, 0)]
         m = S.PolyMesh(np.array(V, float), [np.array([0, 1, 2, 3]), np.array([1, 4, 2])])
@@ -107,6 +119,17 @@ class Valence(TempDirTest):
         self.assertEqual(v['mesh_valence_singularities'], 0)
         self.assertEqual(v['boundary_edges'], 16)
         self.assertEqual(v['histogram'], {'1': 4, '2': 12, '4': 9})
+
+    def test_repeated_vertex_face_is_not_interior(self):
+        V, F = grid(2)
+        # Close the grid's top-right vertex 8 into a fold [8 9 8 10] above it
+        V = V + [(2, 3, 0), (3, 3, 0)]
+        m = S.PolyMesh(np.array(V, float), [np.array(f) for f in F + [[8, 9, 8, 10]]])
+        v = S.valence(m)
+        self.assertEqual(v['faces_with_repeated_vertices'], 1)
+        self.assertEqual(v['histogram'], {'1': 5, '2': 5, '4': 1})
+        self.assertEqual(v['interior_vertices'], 1)
+        self.assertEqual(v['boundary_edges'], 8 + 2)
 
     def test_cube_has_eight_valence3_singularities(self):
         m = trimesh.creation.box()

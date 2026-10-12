@@ -75,11 +75,16 @@ class PolyMesh:
         self.sizes = np.array([len(f) for f in faces], dtype=np.int64)
         self.flat = (np.concatenate(faces) if faces else np.zeros(0, dtype=np.int64))
         self.offsets = np.concatenate([[0], np.cumsum(self.sizes)])
+        self.face_ids = np.repeat(np.arange(len(faces)), self.sizes)
 
     def quads(self):
         """(m, 4) array of the quad faces"""
         sel = np.flatnonzero(self.sizes == 4)
         return self.flat[self.offsets[sel][:, None] + np.arange(4)]
+
+    def repeated(self):
+        """Boolean mask of the faces that visit a vertex more than once"""
+        return np.array([len(np.unique(f)) < len(f) for f in self.faces], dtype=bool)
 
     def edges(self):
         """(e, 2) array of directed half-edges, one per face corner"""
@@ -138,17 +143,21 @@ def sha256(path):
 # ---------------------------------------------------------------- metrics 2 + 3
 
 def quad_quality(mesh):
-    """Angle deviation of quad corners from 90 deg, edge-length CV, non-quad fraction"""
+    """Angle deviation of quad corners from 90 deg, edge-length CV, non-quad fraction.
+
+    Degenerate quads (a zero-length edge, or a vertex visited twice such as the
+    [a v a b] faces Instant Meshes can emit) stay in the angle statistics so that
+    they are penalized: a corner with a zero-length edge counts as 90 deg off."""
     Q = mesh.quads()
     P = mesh.V[Q]                                   # (m, 4, 3)
     a = np.roll(P, 1, axis=1) - P                   # to the previous corner
     b = np.roll(P, -1, axis=1) - P                  # to the next corner
-    la, lb = np.linalg.norm(a, axis=2), np.linalg.norm(b, axis=2)
-    degenerate = np.any((la == 0) | (lb == 0), axis=1)
+    zero = (np.linalg.norm(a, axis=2) == 0) | (np.linalg.norm(b, axis=2) == 0)
     angle = np.degrees(np.arctan2(np.linalg.norm(np.cross(a, b), axis=2),
                                   np.einsum('ijk,ijk->ij', a, b)))
-    dev = np.abs(angle - 90.0)[~degenerate]         # (m', 4)
+    dev = np.where(zero, 90.0, np.abs(angle - 90.0))    # (m, 4)
     face_dev = dev.mean(axis=1)
+    degenerate = zero.any(axis=1) | mesh.repeated()[mesh.sizes == 4]
 
     E = mesh.edges()
     E = np.unique(np.sort(E, axis=1), axis=0)
@@ -169,13 +178,16 @@ def quad_quality(mesh):
 
 
 def valence(mesh):
-    """Incident faces per vertex; interior = every incident edge has exactly two faces"""
+    """Distinct incident faces per vertex. A vertex is interior if each of its edges
+    lies in exactly two distinct faces (so faces that visit a vertex twice do not
+    make it look interior)."""
     nV = len(mesh.V)
-    # Each vertex appears once per incident face (in a valid polygon)
-    face_valence = np.bincount(mesh.flat, minlength=nV)
+    corner = np.unique(np.stack([mesh.flat, mesh.face_ids], axis=1), axis=0)
+    face_valence = np.bincount(corner[:, 0], minlength=nV)
     referenced = face_valence > 0
 
     E = np.sort(mesh.edges(), axis=1)
+    E = np.unique(np.column_stack([E, mesh.face_ids]), axis=0)[:, :2]
     uE, mult = np.unique(E, axis=0, return_counts=True)
     not_interior = np.zeros(nV, dtype=bool)
     irregular_edges = uE[mult != 2]
@@ -193,6 +205,7 @@ def valence(mesh):
         'vertices_unreferenced': int(nV - referenced.sum()),
         'interior_vertices': n_interior,
         'boundary_or_nonmanifold_vertices': int((referenced & not_interior).sum()),
+        'faces_with_repeated_vertices': int(mesh.repeated().sum()),
         'boundary_edges': int((mult == 1).sum()),
         'nonmanifold_edges': int((mult > 2).sum()),
         'histogram': hist(referenced),
@@ -394,6 +407,8 @@ def report(r):
          t['quad_quality']['angle_dev_p90_deg'], '.3f'),
         ('corner angle dev max (deg)', c['quad_quality']['corner_angle_dev_max_deg'],
          t['quad_quality']['corner_angle_dev_max_deg'], '.3f'),
+        ('degenerate quads', c['quad_quality']['degenerate_quads'],
+         t['quad_quality']['degenerate_quads'], 'd'),
         ('edge length CV', c['quad_quality']['edge_length_cv'],
          t['quad_quality']['edge_length_cv'], '.4f'),
         ('non-quad fraction', c['quad_quality']['non_quad_fraction'],
