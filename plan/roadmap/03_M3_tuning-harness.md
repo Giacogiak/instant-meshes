@@ -25,6 +25,11 @@ Map the originally-planned CLI flags onto `im_remesh_params` fields:
 - `scale = -1` (unset, letting `vertex_count` drive sizing, per the plan's original note that
   `-f`/`-v`/`-s` are three parameterizations of the same underlying scale)
 
+> **Measured in M1.1 (read before choosing the anchors below):**
+> - **`deterministic = 1` alone is not enough.** With >1 TBB thread, repeated `-d` runs still differ (8 threads: V=46401 vs. V=46313 for the same input and params). Runs are byte-identical only with **one thread**: call `im_set_thread_count(1)` once per process, before the first `im_remesh`. It can only be set once per process, so for parallelism run several single-threaded worker *processes* rather than threads.
+> - **`pure_quad = 1` applies one subdivision step**, so the output has ~4× the requested size. Via ctypes, `vertex_count = 11082` with `rosy = posy = 4`, `smooth_iter = 2` and 1 thread gave **V=46322, F=41632**, not ~11k. To land near the target's 11,082 V / 11,054 F in pure-quad mode, the swept `vertex_count` must be anchored near **~2,770 (11,082 / 4)**, not 11,082. Verify the anchor with a trial before the grid.
+> - Library path: `build-core/libinstantmeshes_core.so`. `ctypes.sizeof(im_remesh_params)` is 48 (10 `c_int` + 2 `c_float`, in header order). `im_remesh` logs progress to stdout.
+
 - **Swept**: `vertex_count` (anchored near 11,082), `crease_angle` (off, 20°, 30°, 45°, 60°), `smooth_iter` (0, 1, 2, 4).
 - **Fixed**: `posy = 4`, `pure_quad = 1` (matches `quad-remeshed.obj`'s 100%-quad composition), `rosy = 4`.
 - **Always on**: `deterministic = 1` (see above).

@@ -2,9 +2,12 @@
 
 Unit `M1.1`, plan `plan/roadmap/01_M1_native-library.md`. Code commit: `fab2960`.
 
-**Status: blocked on one exit-criterion bullet, the Windows `.dll` via MSVC.** Everything
-that can be built and checked on this Linux machine is done and verified (below). The MSVC
-build needs a Windows machine; see "Open" and the question in the run status.
+**Status: done.** Everything that can be built and checked on this Linux machine is done and
+verified (below). The Windows bullet is closed by decision **D1** (giacomo forcina,
+2026-10-12): the MinGW cross-build evidence is accepted for M1. The MSVC `.dll` build stays an
+**explicitly open item, not yet proven** (Open #1). **D2:** M3 calls `im_remesh` via ctypes
+instead of building the GUI CLI. The owner updated the M3 plan and the `tuning-sweep` check
+(commit `7a8977e`), and I added the measured caveats to the M3 plan (see "For the next units").
 
 ## What changed and why
 
@@ -77,7 +80,7 @@ dependency if wanted.
 
 ## Exit criteria, one by one
 
-### 1. Build the Linux `.so` and the Windows `.dll` — **Linux: met. Windows: not met (blocked)**
+### 1. Build the Linux `.so` and the Windows `.dll` — **Linux: met. Windows: MinGW evidence accepted (D1); MSVC open, not yet proven**
 
 - **Linux `.so`:** I ran the driver's exact `build-core` command (toolbox create check, dnf
   install, submodule update of the 4 submodules, configure `-DIM_CORE_ONLY=ON -G Ninja
@@ -191,7 +194,8 @@ as noisy.
 
 ## Open
 
-1. **MSVC `.dll` build and runtime** (exit criterion 1). Needs a Windows box with VS:
+1. **MSVC `.dll` build and runtime** (exit criterion 1; open by decision D1, not yet proven;
+   re-check in M4 or later once a real Windows build exists). Needs a Windows box with VS:
    `cmake -G "Visual Studio …" -A x64 -DIM_CORE_ONLY=ON` then build `instantmeshes_core`
    and `test_capi`, and run `ctest -C Release`.
    - Things to watch: `/MT` static CRT inside a DLL (fine for this API: no CRT objects
@@ -199,7 +203,9 @@ as noisy.
      `min`/`max` (not seen so far).
    - Also unresolved: whether the MinGW+Wine remesh crash is a real TBB 4.4-on-Windows
      issue.
-2. **Full-GUI configure under CMake ≥ 4** is blocked by GLFW's `CMP0042 OLD`. This affects
+2. **Full-GUI configure under CMake ≥ 4** is blocked by GLFW's `CMP0042 OLD`. *(Resolved for
+   M3 by D2: the sweep uses the C API, so the check no longer builds the GUI. The GUI target
+   itself is still unbuildable with CMake ≥ 4; it doesn't matter for this plan.)* This affects
    M3's `tuning-sweep` check, which uses the toolbox's default `cmake` and the `build/`
    directory. Options: patch the submodule; bump the nanogui submodule; a top-level
    workaround (none found, since CMake 4 rejects setting removed policies to OLD); or
@@ -212,13 +218,32 @@ as noisy.
    `std::terminate` and take down the host. No realistic throw site exists there today; I
    left it alone.
 
+## Tests run (session 2, after D1/D2)
+
+- `cmake --build build-core` (no work to do) and `ctest` in `build-core`: **100% passed (1/1), 4.3 s**.
+- The ctypes smoke check of the C API (above): `rv = 0` both runs, identical output.
+- No code changed in this session; only `plan/roadmap/01_M1_native-library.md` (D1 status
+  note), `plan/roadmap/03_M3_tuning-harness.md` (measured caveats) and this handoff.
+
 ## For the next units
 
-- **M2/M3:**
-  - Pure-quad output has ~4× the requested `-f` faces.
-  - Use `-t 1` for reproducible runs.
-  - Building the GUI CLI in the toolbox needs CMake < 4 (see Open #2). A working one is at
-    `~/.cache/im-cmake3/bin/cmake` inside the toolbox.
+- **M2:**
+  - Its exit criterion needs a "manual `InstantMeshes -v 11082 -p 4 -d` trial", but the GUI
+    CLI doesn't configure under the toolbox's CMake 4.x. Produce that trial `.obj` through
+    the C API instead (byte-identical with one thread). For example, a 20-line ctypes call
+    against `build-core/libinstantmeshes_core.so`, as I ran: `vertex_count = 11082`,
+    `rosy = posy = 4`, `pure_quad = 1`, `deterministic = 1`, `im_set_thread_count(1)`.
+  - Alternatively, use the CMake 3.31 venv at `~/.cache/im-cmake3/bin/cmake` inside the
+    toolbox (it builds the GUI target).
+  - Expect ~4× the target size: that trial gave V=46322, F=41632.
+- **M3:**
+  - Per D2, it uses the C API via ctypes. I added an "M1.1 measured" note to
+    `plan/roadmap/03_M3_tuning-harness.md`: `deterministic = 1` is only reproducible with
+    one thread (`im_set_thread_count(1)`, once per process, so parallelise with worker
+    processes); and pure-quad output has ~4× the faces, so a `vertex_count` anchor of 11,082
+    lands near 41.6k F, not 11k.
+  - The ctypes path was verified this session: `sizeof(params)` = 48; two runs in one
+    process with 1 thread were byte-identical (md5 `dde441c4…`).
 - **M4 (C#):**
   - Library names: Linux `build-core/libinstantmeshes_core.so`; Windows `instantmeshes_core.dll`
     (`PREFIX ""` also applies to MinGW).

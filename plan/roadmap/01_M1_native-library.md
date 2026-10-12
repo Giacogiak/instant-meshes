@@ -116,6 +116,7 @@ This machine has no system C/C++ compiler and host `sudo` requires a password. B
 
 - Build both the Linux `.so` and Windows `.dll` (via the existing VS2015/MSBuild path already proven by `.appveyor.yml`; the Linux `.so` is the one actually buildable and checkable in this environment via the toolbox).
   - *Status after M1.1:* the Linux `.so` is built and tested. No MSVC exists here. A MinGW-w64 cross-build of `instantmeshes_core.dll` builds and exports exactly `im_remesh`/`im_set_thread_count`, and its error paths pass under Wine, but a real remesh crashes inside TBB under MinGW+Wine (see `HANDOFF_M1_TASK1.md`). The MSVC `.dll` build is unverified and needs a Windows machine.
+  - *Decided (giacomo forcina, 2026-10-12, D1):* the MinGW cross-build evidence is accepted for M1. The MSVC build stays an **explicitly open item (not yet proven)**. The TBB crash under MinGW+Wine is unresolved and should be re-checked once a real Windows/MSVC build exists (M4 or later). M4 proceeds Linux-only for now.
 - Write a small native (C/C++) test harness that calls `im_remesh` on `source.obj` and checks `out_vertex_count`/`out_face_count` are populated and sane.
 - Confirm a deliberately bad input path returns `IM_ERR_RUNTIME` with a populated error message rather than crashing or throwing across the `extern "C"` boundary.
 - The existing full-GUI `InstantMeshes` executable target must still build unchanged when `IM_CORE_ONLY` is not set.
