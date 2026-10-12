@@ -14,6 +14,12 @@ Standalone, independent of M1 — runs directly against CLI-produced `.obj` file
 - **Aggregate score**: weighted sum of the above, normalized to `[0,1]` per sub-metric, **starting with equal weights** (per the user's decision) — e.g. `score = mean(ΔV%, ΔF%, mean_angle_dev/45°, edge_length_CV, |%valence4_delta|, |fidelity_delta|/fidelity_target)`. Always print raw sub-metrics alongside the aggregate.
 - **First run to perform once this script exists**: score `quad-remeshed.obj` itself against `source.obj` (treating Rhino's own output as the "candidate") to establish the fidelity baseline that Instant Meshes trials are chasing in metric 4.
 
+> **Corrections from M2.1 (measured, see `HANDOFF_M2_TASK1.md`):**
+> - **`trimesh` does not preserve quads.** `trimesh.load('quad-remeshed.obj', process=False)` returns 22,108 triangles for 11,054 quads. The script parses `v`/`f` records itself (polygons intact) and uses `trimesh` for area-uniform sampling and point-triangle closest points only.
+> - **`trimesh`'s nearest-point queries need `rtree`**, which is not in `pip install trimesh numpy scipy` (`ModuleNotFoundError: No module named 'rtree'`). Nearest-surface distance is done with a `scipy` `cKDTree` over triangle centroids plus an exact bound check. It matches brute force exactly (0.0 error).
+> - **Aggregate:** non-quad fraction is included as a 7th equal-weight term ("weighted sum of *the above*"). `--weight non_quad=0` reproduces the 6-term example formula exactly. Each term is clamped to `[0,1]`; 0 = best.
+> - **Exit criterion 2's trial** was produced through the C API (`im_remesh`, 1 thread), because the GUI CLI does not configure under the toolbox's CMake 4.x. M1 showed this is byte-identical to `InstantMeshes -d -t 1`.
+
 ### Toolchain note for this unit
 
 System `pip` is not installed and this environment has no preexisting Python virtualenv with `trimesh`/`numpy`/`scipy`. Install and run inside the `instant-meshes-build` toolbox container (see plan-run prompt notes) so `pip install` has a reliable base (`python3-pip` via `dnf`) without needing host `sudo`.
