@@ -35,11 +35,11 @@
 			},
 			{
 				"name": "tuning-sweep",
-				"command": "bash -c 'set -e; toolbox list -c instant-meshes-build >/dev/null 2>&1 || toolbox create -y -c instant-meshes-build; toolbox run -c instant-meshes-build sudo dnf install -y gcc gcc-c++ cmake ninja-build mesa-libGL-devel libXrandr-devel libXinerama-devel libXcursor-devel libXi-devel; toolbox run -c instant-meshes-build git -C \"$(pwd)\" submodule update --init --recursive; toolbox run -c instant-meshes-build cmake -S \"$(pwd)\" -B \"$(pwd)/build\" -G Ninja -DCMAKE_BUILD_TYPE=Release; toolbox run -c instant-meshes-build cmake --build \"$(pwd)/build\" --target InstantMeshes; toolbox run -c instant-meshes-build python3 \"$(pwd)/scripts/tune_params.py\" --smoke-test'",
+				"command": "bash -c 'set -e; toolbox list -c instant-meshes-build >/dev/null 2>&1 || toolbox create -y -c instant-meshes-build; toolbox run -c instant-meshes-build sudo dnf install -y gcc gcc-c++ cmake ninja-build python3-pip; toolbox run -c instant-meshes-build git -C \"$(pwd)\" submodule update --init --recursive -- ext/pcg32 ext/dset ext/pss ext/tbb; toolbox run -c instant-meshes-build cmake -S \"$(pwd)\" -B \"$(pwd)/build-core\" -G Ninja -DIM_CORE_ONLY=ON -DCMAKE_BUILD_TYPE=Release; toolbox run -c instant-meshes-build cmake --build \"$(pwd)/build-core\" --target instantmeshes_core; toolbox run -c instant-meshes-build python3 \"$(pwd)/scripts/tune_params.py\" --smoke-test'",
 				"timeoutMinutes": 60,
 				"failLinePattern": "^(CMake Error|error:|FAILED|Traceback)",
 				"escalate": true,
-				"hint": "builds the full-GUI InstantMeshes CLI and smoke-tests scripts/tune_params.py; verifies M3's sweep harness"
+				"hint": "builds instantmeshes_core (IM_CORE_ONLY) and smoke-tests scripts/tune_params.py, which calls im_remesh via ctypes; verifies M3's sweep harness. Per D2 (2026-10-12), M3 no longer needs the full-GUI CLI build, which can't configure under the toolbox's CMake 4.x"
 			},
 			{
 				"name": "csharp-demo",

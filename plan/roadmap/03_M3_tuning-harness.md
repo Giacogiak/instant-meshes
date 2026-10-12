@@ -2,17 +2,35 @@
 
 ## Task 1 — Parameter Tuning Harness (Milestone M3)
 
-Runs directly against the built `InstantMeshes` CLI binary (no need to wait on M1 — faster iteration):
-```
-InstantMeshes source.obj -o trial_<id>.obj -v <v> -c <c> -S <s> -p 4 -d
-```
+**Decided (giacomo forcina, 2026-10-12), amending the original plan:** M1's `instant-meshes-build`
+toolbox has CMake 4.x, and the vendored `ext/nanogui/ext/glfw` submodule's `CMakeLists.txt`
+sets a `cmake_policy` that CMake 4 rejects outright — the full-GUI `InstantMeshes` target
+cannot configure there (pre-existing breakage, not caused by M1). Rather than patch the
+vendored submodule or pin an older CMake, M3 calls `instantmeshes_core`'s C API
+(`im_remesh`, built in M1) **directly** instead of shelling out to the GUI CLI. M1's own
+handoff confirmed this produces byte-identical output to the CLI (`-d -t 1`), so this is a
+pure implementation-path change, not a behavior change. Use Python `ctypes` (or `cffi`) to
+bind `im_remesh`/`im_remesh_params`/`im_remesh_result` from `src/capi.h` and call it from
+`scripts/tune_params.py`; no GLFW/X11/OpenGL toolchain is needed for this milestone at all.
 
-- **Swept**: `-v` (vertex count target, anchored near 11,082; `-f`/`-v`/`-s` are three parameterizations of the same underlying scale via `stats.mSurfaceArea`, batch.cpp:78-90, so sweeping only `-v` is sufficient), `-c` (crease angle: off, 20°, 30°, 45°, 60°), `-S` (smooth iterations: 0, 1, 2, 4).
-- **Fixed**: `-p 4` (pure quad, matches target style), `-D` omitted (keeps `pure_quad=true`, matching `quad-remeshed.obj`'s 100%-quad composition), `-r 4` (conventional pairing with `-p 4`).
-- **Always on**: `-d/--deterministic` — without it, TBB's parallel reductions make `optimizeOrientations`/`optimizePositions` nondeterministic run-to-run (CMakeLists.txt:163-164 links `tbb_static`), which would inject noise into the score and corrupt the search signal.
+Map the originally-planned CLI flags onto `im_remesh_params` fields:
+- `-v <v>` → `vertex_count = v`, `face_count = -1`
+- `-c <c>` → `crease_angle = c` (or `-1` for "off")
+- `-S <s>` → `smooth_iter = s`
+- `-p 4` → `posy = 4`, `pure_quad = 1`
+- `-r 4` (conventional pairing with `-p 4`) → `rosy = 4`
+- `-d/--deterministic` → `deterministic = 1` — without it, TBB's parallel reductions make
+  `optimizeOrientations`/`optimizePositions` nondeterministic run-to-run, which would inject
+  noise into the score and corrupt the search signal; always set it.
+- `scale = -1` (unset, letting `vertex_count` drive sizing, per the plan's original note that
+  `-f`/`-v`/`-s` are three parameterizations of the same underlying scale)
+
+- **Swept**: `vertex_count` (anchored near 11,082), `crease_angle` (off, 20°, 30°, 45°, 60°), `smooth_iter` (0, 1, 2, 4).
+- **Fixed**: `posy = 4`, `pure_quad = 1` (matches `quad-remeshed.obj`'s 100%-quad composition), `rosy = 4`.
+- **Always on**: `deterministic = 1` (see above).
 - **Search strategy**:
-  1. **Stage 1 — coarse grid search** over `-v` × `-c` × `-S` (e.g. `-v` ∈ {8000, 9500, 11082, 12500, 14000}, `-c` ∈ {off, 30, 45}, `-S` ∈ {0, 2, 4}) — cheap, trivially parallelizable (independent subprocesses), surfaces the overall response shape.
-  2. **Stage 2 — local refinement** around the Stage-1 best point (tighter grid, or `scipy.optimize.minimize` with `Nelder-Mead`/`Powell` wrapping "run CLI → score" as the objective, focused on `-c`/`-S` once Stage 1 has anchored `-v`).
+  1. **Stage 1 — coarse grid search** over `vertex_count` × `crease_angle` × `smooth_iter` (e.g. `vertex_count` ∈ {8000, 9500, 11082, 12500, 14000}, `crease_angle` ∈ {off, 30, 45}, `smooth_iter` ∈ {0, 2, 4}) — cheap, trivially parallelizable (independent `im_remesh` calls, each with its own output path), surfaces the overall response shape.
+  2. **Stage 2 — local refinement** around the Stage-1 best point (tighter grid, or `scipy.optimize.minimize` with `Nelder-Mead`/`Powell` wrapping "call `im_remesh` → score" as the objective, focused on `crease_angle`/`smooth_iter` once Stage 1 has anchored `vertex_count`).
 - **Logging**: one row per trial (full param set + raw sub-metrics + aggregate score) to a CSV/JSONL — the artifact that becomes the M3 deliverable (best params found + a short write-up of which parameter the score was most sensitive to).
 
 ### Optional secondary pass (not the primary mechanism)
@@ -21,11 +39,11 @@ Once a numerically-best parameter set is found, an LLM-in-the-loop step (the `/l
 
 ### Naming convention for this unit
 
-Name the sweep driver script `scripts/tune_params.py` and the trial log `tuning_results.jsonl`, and give the script a `--smoke-test` flag that runs exactly one cheap trial end-to-end (build/skip build, one `InstantMeshes` invocation, one scoring call, one logged row) and exits 0/non-zero accordingly — this is what the project's automated check runs.
+Name the sweep driver script `scripts/tune_params.py` and the trial log `tuning_results.jsonl`, and give the script a `--smoke-test` flag that runs exactly one cheap trial end-to-end (build `instantmeshes_core` if not already built, one `im_remesh` call via ctypes, one scoring call, one logged row) and exits 0/non-zero accordingly — this is what the project's automated check runs.
 
 ### Toolchain note for this unit
 
-Building the full-GUI `InstantMeshes` CLI binary needs a C/C++ compiler plus GLFW/X11/OpenGL dev headers, none of which are on the host. Build and run inside the `instant-meshes-build` toolbox container (see plan-run prompt notes).
+Building `instantmeshes_core` (`IM_CORE_ONLY=ON`) needs only a C/C++ compiler and CMake/Ninja — no GLFW/X11/OpenGL — so this unit does not need the full-GUI target at all. Build and run inside the `instant-meshes-build` toolbox container (see plan-run prompt notes), reusing M1's `build-core` CMake invocation.
 
 ## Exit criteria
 
