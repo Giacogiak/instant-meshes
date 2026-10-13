@@ -71,6 +71,17 @@ one synthetic mesh with a known curvature split (e.g. a bent strip: flat half + 
 creased half) so the high/low-curvature split can be checked against a known-correct
 answer, not just "it runs."
 
+**Decided (giacomo forcina, 2026-10-13), resolving D9:** keep the validated defaults —
+`radius_scale = 1.0` (the target's own mean edge length, 2.1426) and `pctl = 10`. The
+owner characterized what they saw as "dents that make the shape jagged, in respect to the
+original curve" — local, small-scale irregularity relative to the intended smooth surface,
+rather than clearly one of "tight sharp creases" or "broad rounded fillets." Since the
+measured fidelity-ratio finding (1.44–1.82× the target in high-curvature regions) holds
+across every radius/percentile combination M5.1 tried, and nothing in this description
+argues for a smaller (0.5×) or larger (2×) radius over the validated 1×/10% default, M5.2
+should use `radius_scale=1.0, pctl=10` and carry the owner's description forward as
+qualitative context for whoever visually inspects the eventual top-ranked mesh.
+
 **Status after M5.1 (2026-10-13):** `scripts/mesh_locality.py` and its tests are in place
 (evidence and D9 data in `HANDOFF_M5_TASK1.md`). Three corrections to the text above,
 measured in the toolbox: (1) `discrete_mean_curvature_measure` is importable but needs the
