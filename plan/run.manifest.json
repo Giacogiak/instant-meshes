@@ -48,6 +48,14 @@
 				"failLinePattern": "^(error|Unhandled exception)",
 				"escalate": true,
 				"hint": "builds and smoke-runs csharp-demo/; verifies M4's P/Invoke console app"
+			},
+			{
+				"name": "rank-trials",
+				"command": "bash -c 'set -e; toolbox list -c instant-meshes-build >/dev/null 2>&1 || toolbox create -y -c instant-meshes-build; toolbox run -c instant-meshes-build sudo dnf install -y python3-pip; toolbox run -c instant-meshes-build python3 -m pip install --user -q trimesh numpy scipy; toolbox run -c instant-meshes-build python3 \"$(pwd)/scripts/rank_trials.py\"'",
+				"timeoutMinutes": 30,
+				"failLinePattern": "^(Traceback|Error)",
+				"escalate": true,
+				"hint": "re-ranks the 137 trials already logged in tuning_results.jsonl with no new im_remesh calls; verifies M5's locality metric + re-ranking. Assumes tuning_results.jsonl and tuning_runs/meshes/*.obj already exist from M3's sweep (gitignored, present in this working tree, not re-created by this check)"
 			}
 		],
 		"diffRules": [
@@ -66,6 +74,10 @@
 			{
 				"pattern": "^csharp-demo/",
 				"adds": "csharp-demo"
+			},
+			{
+				"pattern": "^scripts/(mesh_locality|rank_trials)\\.py",
+				"adds": "rank-trials"
 			}
 		],
 		"exitCriteriaRules": [],
@@ -179,6 +191,55 @@
 			"gate": "auto",
 			"gateReason": "no stop rule matched",
 			"handoff": "HANDOFF_M4_TASK2.md",
+			"verify": [
+				"tree-clean",
+				"new-commit",
+				"handoff"
+			]
+		},
+		{
+			"id": "M5.1",
+			"title": "Curvature/locality metric module (Milestone M5)",
+			"planFile": "plan/roadmap/05_M5_locality-reranking.md",
+			"task": "Task 1 — Curvature/locality metric module (Milestone M5)",
+			"convention": "h2",
+			"sharedCriteria": "## Exit criteria",
+			"gate": "auto",
+			"gateReason": "no stop rule matched",
+			"handoff": "HANDOFF_M5_TASK1.md",
+			"verify": [
+				"tree-clean",
+				"new-commit",
+				"handoff"
+			]
+		},
+		{
+			"id": "M5.2",
+			"title": "Constraint-first re-ranking of the 137 existing trials (Milestone M5)",
+			"planFile": "plan/roadmap/05_M5_locality-reranking.md",
+			"task": "Task 2 — Constraint-first re-ranking of the 137 existing trials (Milestone M5)",
+			"convention": "h2",
+			"sharedCriteria": "## Exit criteria",
+			"gate": "auto",
+			"gateReason": "no stop rule matched",
+			"handoff": "HANDOFF_M5_TASK2.md",
+			"verify": [
+				"tree-clean",
+				"new-commit",
+				"handoff"
+			]
+		},
+		{
+			"id": "M5.3",
+			"title": "(deferred, not started until the owner reviews Task 2's findings) aligntoboundaries × extrinsic re-sweep (Milestone M5)",
+			"planFile": "plan/roadmap/05_M5_locality-reranking.md",
+			"task": "Task 3 — *(deferred, not started until the owner reviews Task 2's findings)* `align_to_boundaries` × `extrinsic` re-sweep (Milestone M5)",
+			"convention": "h2",
+			"sharedCriteria": "## Exit criteria",
+			"phaseEnd": true,
+			"gate": "stop",
+			"gateReason": "its title says \"deferred\" — decide before this runs",
+			"handoff": "HANDOFF_M5_TASK3.md",
 			"verify": [
 				"tree-clean",
 				"new-commit",
