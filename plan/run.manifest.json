@@ -50,12 +50,20 @@
 				"hint": "builds and smoke-runs csharp-demo/; verifies M4's P/Invoke console app"
 			},
 			{
+				"name": "locality-module",
+				"command": "bash -c 'set -e; toolbox list -c instant-meshes-build >/dev/null 2>&1 || toolbox create -y -c instant-meshes-build; toolbox run -c instant-meshes-build sudo dnf install -y python3-pip; toolbox run -c instant-meshes-build python3 -m pip install --user -q trimesh numpy scipy; toolbox run -c instant-meshes-build python3 \"$(pwd)/scripts/mesh_locality.py\" --source \"$(pwd)/source.obj\" --target \"$(pwd)/quad-remeshed.obj\" --candidate \"$(pwd)/tuning_runs/meshes/v2799_coff_s1.obj\"'",
+				"timeoutMinutes": 15,
+				"failLinePattern": "^(Traceback|Error)",
+				"escalate": true,
+				"hint": "runs scripts/mesh_locality.py standalone against M3/M4's chosen trial, with no im_remesh call; verifies M5 Task 1's locality metric module. Assumes tuning_runs/meshes/v2799_coff_s1.obj already exists from M3's sweep"
+			},
+			{
 				"name": "rank-trials",
 				"command": "bash -c 'set -e; toolbox list -c instant-meshes-build >/dev/null 2>&1 || toolbox create -y -c instant-meshes-build; toolbox run -c instant-meshes-build sudo dnf install -y python3-pip; toolbox run -c instant-meshes-build python3 -m pip install --user -q trimesh numpy scipy; toolbox run -c instant-meshes-build python3 \"$(pwd)/scripts/rank_trials.py\"'",
 				"timeoutMinutes": 30,
 				"failLinePattern": "^(Traceback|Error)",
 				"escalate": true,
-				"hint": "re-ranks the 137 trials already logged in tuning_results.jsonl with no new im_remesh calls; verifies M5's locality metric + re-ranking. Assumes tuning_results.jsonl and tuning_runs/meshes/*.obj already exist from M3's sweep (gitignored, present in this working tree, not re-created by this check)"
+				"hint": "re-ranks the 137 trials already logged in tuning_results.jsonl with no new im_remesh calls; verifies M5 Task 2's re-ranking. Assumes tuning_results.jsonl and tuning_runs/meshes/*.obj already exist from M3's sweep (gitignored, present in this working tree, not re-created by this check)"
 			}
 		],
 		"diffRules": [
@@ -76,7 +84,11 @@
 				"adds": "csharp-demo"
 			},
 			{
-				"pattern": "^scripts/(mesh_locality|rank_trials)\\.py",
+				"pattern": "^scripts/mesh_locality\\.py",
+				"adds": "locality-module"
+			},
+			{
+				"pattern": "^scripts/rank_trials\\.py",
 				"adds": "rank-trials"
 			}
 		],
