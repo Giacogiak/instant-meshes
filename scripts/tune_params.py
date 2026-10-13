@@ -75,11 +75,17 @@ SMOKE_VC = 300             # small enough for a fast trial
 
 # ---------------------------------------------------------------- welding
 
-def components(n_vertices, mesh):
+def components(n_vertices, mesh, return_labels=False):
+    """Number of connected components among the vertices the faces reference. With
+    return_labels, also returns each vertex's component label (unreferenced vertices
+    get labels of their own)."""
     E = mesh.edges()
     g = coo_matrix((np.ones(len(E)), (E[:, 0], E[:, 1])), shape=(n_vertices,) * 2)
     labels = connected_components(g, directed=False)[1]
-    return int(len(np.unique(labels[mesh.flat])))
+    count = int(len(np.unique(labels[mesh.flat])))
+    if return_labels:
+        return count, labels
+    return count
 
 
 def weld(mesh, tol):

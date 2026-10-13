@@ -71,6 +71,19 @@ one synthetic mesh with a known curvature split (e.g. a bent strip: flat half + 
 creased half) so the high/low-curvature split can be checked against a known-correct
 answer, not just "it runs."
 
+**Status after M5.1 (2026-10-13):** `scripts/mesh_locality.py` and its tests are in place
+(evidence and D9 data in `HANDOFF_M5_TASK1.md`). Three corrections to the text above,
+measured in the toolbox: (1) `discrete_mean_curvature_measure` is importable but needs the
+optional `rtree` package at call time (`mesh.face_adjacency_tree`), which is not installed;
+the module passes it an rtree-free stand-in built on `cKDTree` (tested against an exhaustive
+candidate set), so trimesh's formula is still the one used. (2) `tune_params.components()`
+returned only a count, so `largest_boundary_component_edges` could not be had from it; it
+gained the same kind of backward-compatible `return_labels=False` flag as the
+`score_remesh` functions. (3) Curvature must be computed on the **welded** source: on the
+raw `source.obj` the 40 components' seams carry no face adjacency and their folds vanish
+from the measure. The weld keeps every face in order, so triangle indices still match
+`Reference`'s `SurfaceDistance`.
+
 ## Task 2 — Constraint-first re-ranking of the 137 existing trials (Milestone M5)
 
 Add **`scripts/rank_trials.py`**, which:

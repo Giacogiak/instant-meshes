@@ -142,12 +142,15 @@ def sha256(path):
 
 # ---------------------------------------------------------------- metrics 2 + 3
 
-def quad_quality(mesh):
+def quad_quality(mesh, return_detail=False):
     """Angle deviation of quad corners from 90 deg, edge-length CV, non-quad fraction.
 
     Degenerate quads (a zero-length edge, or a vertex visited twice such as the
     [a v a b] faces Instant Meshes can emit) stay in the angle statistics so that
-    they are penalized: a corner with a zero-length edge counts as 90 deg off."""
+    they are penalized: a corner with a zero-length edge counts as 90 deg off.
+
+    With return_detail, also returns {'quad_faces': face index of each quad,
+    'degenerate': mask over those quads}."""
     Q = mesh.quads()
     P = mesh.V[Q]                                   # (m, 4, 3)
     a = np.roll(P, 1, axis=1) - P                   # to the previous corner
@@ -163,7 +166,7 @@ def quad_quality(mesh):
     E = np.unique(np.sort(E, axis=1), axis=0)
     length = np.linalg.norm(mesh.V[E[:, 0]] - mesh.V[E[:, 1]], axis=1)
 
-    return {
+    metrics = {
         'quad_faces': int(len(Q)),
         'degenerate_quads': int(degenerate.sum()),
         'angle_dev_mean_deg': float(face_dev.mean()) if len(face_dev) else None,
@@ -175,12 +178,19 @@ def quad_quality(mesh):
         'non_quad_faces': int((mesh.sizes != 4).sum()),
         'non_quad_fraction': float((mesh.sizes != 4).mean()),
     }
+    if return_detail:
+        return metrics, {'quad_faces': np.flatnonzero(mesh.sizes == 4),
+                         'degenerate': degenerate}
+    return metrics
 
 
-def valence(mesh):
+def valence(mesh, return_detail=False):
     """Distinct incident faces per vertex. A vertex is interior if each of its edges
     lies in exactly two distinct faces (so faces that visit a vertex twice do not
-    make it look interior)."""
+    make it look interior).
+
+    With return_detail, also returns {'not_interior': vertex mask, 'boundary_edges':
+    (b, 2) array of the edges that lie in exactly one face}."""
     nV = len(mesh.V)
     corner = np.unique(np.stack([mesh.flat, mesh.face_ids], axis=1), axis=0)
     face_valence = np.bincount(corner[:, 0], minlength=nV)
@@ -200,7 +210,7 @@ def valence(mesh):
 
     n_interior = int(interior.sum())
     n_val4 = int((interior & (face_valence == 4)).sum())
-    return {
+    metrics = {
         'vertices_referenced': int(referenced.sum()),
         'vertices_unreferenced': int(nV - referenced.sum()),
         'interior_vertices': n_interior,
@@ -213,6 +223,9 @@ def valence(mesh):
         'pct_valence4_interior': 100.0 * n_val4 / n_interior if n_interior else None,
         'mesh_valence_singularities': n_interior - n_val4,
     }
+    if return_detail:
+        return metrics, {'not_interior': not_interior, 'boundary_edges': uE[mult == 1]}
+    return metrics
 
 
 # ---------------------------------------------------------------- metric 4
@@ -229,15 +242,22 @@ class SurfaceDistance:
         self.r_max = float(np.linalg.norm(self.tris - centroid[:, None], axis=2).max())
         self.tree = cKDTree(centroid)
 
-    def __call__(self, points):
+    def __call__(self, points, return_triangle=False):
+        """Distances from points to the surface. With return_triangle, also returns
+        the index of a nearest triangle for each point."""
         k = min(self.K, len(self.tris))
         dc, idx = self.tree.query(points, k=k)
         if k == 1:
             dc, idx = dc[:, None], idx[:, None]
         best = np.full(len(points), np.inf)
+        best_tri = np.full(len(points), -1, dtype=np.int64)
         for j in range(k):
             cp = trimesh.triangles.closest_point(self.tris[idx[:, j]], points)
-            best = np.minimum(best, np.linalg.norm(cp - points, axis=1))
+            d = np.linalg.norm(cp - points, axis=1)
+            if return_triangle:
+                closer = d < best
+                best_tri[closer] = idx[closer, j]
+            best = np.minimum(best, d)
 
         # Any untried triangle t has |p - centroid_t| >= dc[:, -1] and therefore a
         # distance >= dc[:, -1] - r_max. Points where that does not settle it are
@@ -252,7 +272,18 @@ class SurfaceDistance:
                 ti = np.concatenate(cand).astype(np.int64)
                 cp = trimesh.triangles.closest_point(self.tris[ti], points[pi])
                 d = np.linalg.norm(cp - points[pi], axis=1)
+                if return_triangle:
+                    # Per point, the candidate with the smallest distance (the first
+                    # one after sorting by point, then distance)
+                    order = np.lexsort((d, pi))
+                    first = np.ones(len(order), dtype=bool)
+                    first[1:] = pi[order][1:] != pi[order][:-1]
+                    p, dmin, t = pi[order][first], d[order][first], ti[order][first]
+                    closer = dmin < best[p]
+                    best_tri[p[closer]] = t[closer]
                 np.minimum.at(best, pi, d)
+        if return_triangle:
+            return best, best_tri
         return best
 
 
