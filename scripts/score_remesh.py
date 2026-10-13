@@ -315,18 +315,21 @@ def clamp01(x):
     return 1.0 if x is None or not math.isfinite(x) else min(max(x, 0.0), 1.0)
 
 
+def ratio(x, ref):
+    """|x| / ref, where x is candidate - target: the relative distance to the target.
+    None if ref is 0 and x is not."""
+    # x == 0 means candidate == target on this metric: a perfect match, cost 0, even
+    # when ref is itself 0 (e.g. a perfectly regular mesh with 0 angle deviation).
+    if x == 0:
+        return 0.0
+    return abs(x) / ref if ref else None
+
+
 def aggregate(cand, target, weights):
     cc, tc = cand['counts'], target['counts']
     cq, tq = cand['quad_quality'], target['quad_quality']
     cv, tv = cand['valence'], target['valence']
     cf, tf = cand['fidelity'], target['fidelity']
-
-    def ratio(x, ref):
-        # x == 0 means candidate == target on this metric: a perfect match, cost 0, even
-        # when ref is itself 0 (e.g. a perfectly regular mesh with 0 angle deviation).
-        if x == 0:
-            return 0.0
-        return abs(x) / ref if ref else None
 
     v4c, v4t = cv['pct_valence4_interior'], tv['pct_valence4_interior']
     # angle and edge_cv are scored relative to the target, not minimized toward 0/90deg:

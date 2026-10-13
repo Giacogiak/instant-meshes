@@ -136,6 +136,18 @@ Add **`scripts/rank_trials.py`**, which:
    `gates: {G1, G2, G3}`, `passed`, the full `locality` record, and `rank` (null if it
    didn't pass). Prints a summary report in the style of `tune_params.py --report`.
 
+**Status after M5.2 (2026-10-13):** `scripts/rank_trials.py` and its tests are in place,
+and all 137 meshes verified and re-ranked (evidence and D10–D12 data in
+`HANDOFF_M5_TASK2.md`). Two notes on the text above, both measured: (1) `ratio()` was a
+closure inside `aggregate()`, so it could not be reused as written; it was lifted to a
+module-level `score_remesh.ratio()` with the same body, and `aggregate()` now calls that.
+(2) The ranking as specified has no vertex-count control, and fidelity improves with
+vertex count across the sweep: the new #1 (`v3450_c45_s2`) has 26% more vertices than
+the target and sits at the top edge of the swept `vertex_count` range. The report
+therefore also lists the best trials within ±5% of the target's V, and `--rank-by
+worst_bucket` offers the high/low-bucket blend D12 mentions. Whether to add a count gate
+is the owner's call; nothing was gated on it.
+
 ### Exit criteria for Task 1 + Task 2
 
 - `scripts/mesh_locality.py` run standalone (e.g.
