@@ -16,3 +16,5 @@ No `.NET` SDK is on the host. Build and run inside the `instant-meshes-build` to
 
 - Run the C# console app on Linux (via the toolbox) and diff its `out_vertex_count`/`out_face_count` and output `.obj` against the equivalent direct CLI invocation's result — should be identical under `-d` (deterministic mode).
 - The Windows `.dll` path is not buildable in this environment; document in the handoff that it still needs manual validation on a Windows machine or CI runner, and leave that as an explicit open item rather than claiming it as done.
+
+**Status after M4.1 (2026-10-13):** the Linux criterion is met. The C# output is byte-identical to the current CLI's, the pre-M1 (`05138b8`) CLI's and M3's ctypes trial `v2799_coff_s1`, on both the welded and the raw source (evidence in `HANDOFF_M4_TASK1.md`). The Windows `.dll` path stays an **explicit open item, not yet validated**.
