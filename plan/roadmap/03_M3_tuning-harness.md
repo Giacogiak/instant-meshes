@@ -77,3 +77,16 @@ Building `instantmeshes_core` (`IM_CORE_ONLY=ON`) needs only a C/C++ compiler an
 - `source.obj` is welded before the sweep (D6); the welded mesh's boundary-edge count is measured and reported, and is substantially closer to the target's 242 than the unwelded mesh's 9,512.
 - After the sweep, re-run the single best parameter set standalone and confirm the logged score matches a fresh scorer invocation (no drift from caching/logging bugs).
 - `scripts/tune_params.py --smoke-test` must run one trial end-to-end and exit 0.
+
+**Decided (giacomo forcina, 2026-10-13), resolving the M3.1 handoff's "What the owner should look at":**
+- **D7 — `edge_cv` weighting:** keep it as an equal-weight term (no change from D4/D3's defaults).
+  Instant Meshes' uniform spacing vs. Rhino's size-adaptive spacing is a real, user-visible
+  difference, not scoring noise, so the term stays even though it dominates every trial's score
+  and no swept parameter moves it.
+- **D8 — best parameter set:** switch from the logged lowest score (`v2663_c45_s1`, 0.1428,
+  45° crease) to the runner-up (`v2799_coff_s1`, 0.1461, no crease angle) as M3's recommended
+  set. The two are within the handoff's measured noise band and nobody visually inspected
+  either mesh; the no-crease set is preferred for being simpler (no crease-angle heuristic to
+  second-guess). Carry `vertex_count=2799, crease_angle=off, smooth_iter=1` (else as logged:
+  `rosy=posy=4, pure_quad=1, deterministic=1, scale=-1, face_count=-1`) forward to M4 instead
+  of the `v2663_c45_s1` row quoted elsewhere in `HANDOFF_M3_TASK1.md`.
