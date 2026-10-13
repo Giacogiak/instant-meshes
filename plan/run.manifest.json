@@ -159,10 +159,26 @@
 			"task": "Task 1 — C# P/Invoke Demo Project (Milestone M4)",
 			"convention": "h2",
 			"sharedCriteria": "## Exit criteria",
-			"phaseEnd": true,
 			"gate": "auto",
 			"gateReason": "no stop rule matched",
 			"handoff": "HANDOFF_M4_TASK1.md",
+			"verify": [
+				"tree-clean",
+				"new-commit",
+				"handoff"
+			]
+		},
+		{
+			"id": "M4.2",
+			"title": "Weld the demo's default input (Milestone M4)",
+			"planFile": "plan/roadmap/04_M4_pinvoke-demo.md",
+			"task": "Task 2 — Weld the demo's default input (Milestone M4)",
+			"convention": "h2",
+			"sharedCriteria": "## Exit criteria",
+			"phaseEnd": true,
+			"gate": "auto",
+			"gateReason": "no stop rule matched",
+			"handoff": "HANDOFF_M4_TASK2.md",
 			"verify": [
 				"tree-clean",
 				"new-commit",
