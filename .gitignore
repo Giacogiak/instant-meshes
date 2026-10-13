@@ -25,3 +25,4 @@ datasets
 build-core
 __pycache__
 tuning_runs
+remeshed_csharp.obj

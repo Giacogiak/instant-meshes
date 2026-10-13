@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Console demo consuming the instantmeshes_core shared library (src/capi.h) via P/Invoke.
+       Build the native library first (see README.md), then dotnet run. -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyName>InstantMeshesDemo</AssemblyName>
+    <RootNamespace>InstantMeshesDemo</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- Where the native library was built; override with -p:ImCoreDir=... -->
+    <ImCoreDir Condition="'$(ImCoreDir)' == ''">$(MSBuildProjectDirectory)/../build-core</ImCoreDir>
+  </PropertyGroup>
+
+  <!-- Ship the native binary next to the managed assembly, so DllImport("instantmeshes_core")
+       resolves it by platform convention (libinstantmeshes_core.so / instantmeshes_core.dll).
+       Only the files that exist at build time are copied; Program.cs falls back to
+       <repo>/build-core at run time. -->
+  <ItemGroup>
+    <None Include="$(ImCoreDir)/libinstantmeshes_core.so" Link="libinstantmeshes_core.so"
+          CopyToOutputDirectory="PreserveNewest" Condition="Exists('$(ImCoreDir)/libinstantmeshes_core.so')" />
+    <None Include="$(ImCoreDir)/instantmeshes_core.dll" Link="instantmeshes_core.dll"
+          CopyToOutputDirectory="PreserveNewest" Condition="Exists('$(ImCoreDir)/instantmeshes_core.dll')" />
+    <None Include="$(ImCoreDir)/Release/instantmeshes_core.dll" Link="instantmeshes_core.dll"
+          CopyToOutputDirectory="PreserveNewest" Condition="!Exists('$(ImCoreDir)/instantmeshes_core.dll') And Exists('$(ImCoreDir)/Release/instantmeshes_core.dll')" />
+  </ItemGroup>
+
+</Project>
