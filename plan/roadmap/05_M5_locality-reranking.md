@@ -136,6 +136,25 @@ Add **`scripts/rank_trials.py`**, which:
    `gates: {G1, G2, G3}`, `passed`, the full `locality` record, and `rank` (null if it
    didn't pass). Prints a summary report in the style of `tune_params.py --report`.
 
+**Decided (giacomo forcina, 2026-10-13), resolving D10–D14:**
+- **D10 — G2 limit:** accept `N = 44` (the measured 95th-percentile natural break), unchanged.
+- **D11 — G3 multiplier:** accept `k = 2` (the measured natural break between the ratio
+  distribution's two modes), unchanged.
+- **D12 — rank formula:** switch the default from `high_p95` to **`worst_bucket`**
+  (`max(high_curv, low_curv)` ratio-to-target) — a trial must not win by sacrificing flat
+  regions to fix curved ones. The #1 is unchanged either way (`v3450_c45_s2`); this mainly
+  reorders ranks 2–10 and removes the `crease_angle=20` trials from the top, which M5.2
+  measured as 2.6–2.85× worse than the target in low-curvature regions despite ranking
+  well on `high_p95` alone.
+- **D14 — vertex-count control:** accept the denser pick. `v3450_c45_s2` (+26% V vs. the
+  target) stays the milestone's recommended trial; no `|ΔV|` gate is added. The
+  count-matched alternative (`v2799_coff_s2`, same V as D8's old pick, `smooth_iter=2`)
+  stays available in the report for anyone who needs output at the target's density.
+- **D13 — Task 3 trigger:** skip it for now. M5.2's data shows a weak signal for the
+  `align_to_boundaries`/`extrinsic` theory (G2 rejects only 6 low-count trials, none near
+  the top; the boundary-free trials are simply the densest ones). `M5.3` stays in the
+  manifest, gated `stop`, available to trigger later if this reading changes.
+
 **Status after M5.2 (2026-10-13):** `scripts/rank_trials.py` and its tests are in place,
 and all 137 meshes verified and re-ranked (evidence and D10–D12 data in
 `HANDOFF_M5_TASK2.md`). Two notes on the text above, both measured: (1) `ratio()` was a
