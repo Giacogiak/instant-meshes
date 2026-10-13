@@ -155,6 +155,15 @@ Add **`scripts/rank_trials.py`**, which:
   the top; the boundary-free trials are simply the densest ones). `M5.3` stays in the
   manifest, gated `stop`, available to trigger later if this reading changes.
 
+**Visual confirmation (giacomo forcina, 2026-10-13):** opened `v3450_c45_s2.obj` next to
+`source.obj`. Verdict: a real improvement over M3/D8's `v2799_coff_s1`, but **still not
+acceptable** as a final result. M5 closes with "better, not solved" — consistent with the
+measured data (the best trial in the whole 137-trial sweep is still 1.237× the target's
+high-curvature fidelity, not parity). The owner is separately considering whether
+`source.obj`'s complexity is itself the limiting factor for what this library can achieve,
+independent of any further parameter or scoring work (see conversation, not yet a decision
+or a new milestone).
+
 **Status after M5.2 (2026-10-13):** `scripts/rank_trials.py` and its tests are in place,
 and all 137 meshes verified and re-ranked (evidence and D10–D12 data in
 `HANDOFF_M5_TASK2.md`). Two notes on the text above, both measured: (1) `ratio()` was a
