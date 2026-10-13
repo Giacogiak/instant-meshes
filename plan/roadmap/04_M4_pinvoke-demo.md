@@ -61,3 +61,12 @@ clearly (e.g. `Welder.Weld(...)`) so it is easy to find from `Program.cs`.
 - The existing `csharp-demo` check and `compare_with_cli.sh` still pass; update
   `compare_with_cli.sh` if its CLI-comparison step needs to weld its own input first to stay
   a fair comparison.
+
+**Status after M4.2 (2026-10-13):** met on Linux. With no flags the demo welds `source.obj`
+(`csharp-demo/Welder.cs`, `Welder.Weld`) into a file byte-identical to M3's
+`tuning_runs/source_welded.obj` (`b63990bc…`), and its output is byte-identical to M3's
+`v2799_coff_s1` (`fd857df8…`, score 0.1461292849353033). `--no-weld` gives M4.1's raw
+result (`7411eab1…`). `compare_with_cli.sh` now feeds the CLI the demo's welded mesh and
+takes `--no-weld`; it passes in both modes against the current and the pre-M1 CLI.
+Evidence in `HANDOFF_M4_TASK2.md`. The Windows `.dll` path is still an **explicit open
+item, not validated**.

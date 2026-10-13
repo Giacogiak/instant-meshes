@@ -13,17 +13,33 @@ cmake --build build-core --target instantmeshes_core
 # 2. The demo; the build copies build-core/libinstantmeshes_core.so next to the assembly
 sudo dnf install -y dotnet-sdk-8.0
 dotnet build csharp-demo
-dotnet run --project csharp-demo -- --smoke-test     # one small remesh, exits 0 on success
-dotnet run --project csharp-demo -- --input tuning_runs/source_welded.obj --output out.obj
+dotnet run --project csharp-demo -- --smoke-test     # weld checks + one small remesh, exits 0 on success
+dotnet run --project csharp-demo                      # weld source.obj, remesh with M3's D8 set
+dotnet run --project csharp-demo -- --no-weld         # remesh the raw source.obj instead
 ```
 
-Without options the demo remeshes `<repo>/source.obj` to `remeshed_csharp.obj` with M3's
-recommended set (decision D8): `-v 2799`, no crease angle, `-S 1`, pure quad,
-deterministic, 1 thread. `--help` lists the options, which mirror the CLI's flags.
+Without options the demo welds `<repo>/source.obj`, then remeshes the welded mesh to
+`remeshed_csharp.obj` with M3's recommended set (decision D8): `-v 2799`, no crease angle,
+`-S 1`, pure quad, deterministic, 1 thread. That reproduces M3's trial `v2799_coff_s1`
+byte for byte (sha256 `fd857df8…`, score 0.1461292849353033). `--help` lists the
+options, which mirror the CLI's flags.
 
-M3 tuned that set on the **welded** source (`tuning_runs/source_welded.obj`; write it with
-`python3 -c "import sys; sys.path.insert(0, 'scripts'); import tune_params; tune_params.make_welded_source()"`).
-On the unwelded `source.obj`, every parameter set leaves holes along the part's seams.
+## Welding
+
+`source.obj` is 40 components whose seam vertices are duplicated, so Instant Meshes sees
+open boundaries along every seam and leaves holes there. M3 tuned D8 on a **welded** copy
+(decision D6). `Welder.Weld` (`Welder.cs`) is a port of `scripts/tune_params.py`'s
+`weld()`: vertices within 1e-5 of each other are merged, transitively, into the one with
+the lowest index; faces that would lose a vertex are dropped. It writes the welded mesh
+the way `tune_params.write_obj()` does, so its output is the same file as M3's
+`tuning_runs/source_welded.obj` (sha256 `b63990bc…`), which `--smoke-test` checks.
+
+- Any `.obj` input is welded (it is a no-op on a mesh without coincident vertices); other
+  formats need `--no-weld`.
+- The welded mesh goes to a temporary file that is deleted afterwards;
+  `--save-welded <file>` keeps it instead.
+- `--no-weld` remeshes the input as it is (M4.1's behaviour; on `source.obj`: V/F
+  11551/9908, sha256 `7411eab1…`).
 
 The output is reproducible only with one thread (`--threads 1`, the default):
 `im_set_thread_count` is called once, before the first `im_remesh`.
@@ -39,10 +55,12 @@ library was not there at build time, the app falls back to `$IM_CORE_LIB`, then 
 
 ## Parity with the CLI
 
-`compare_with_cli.sh <"Instant Meshes" binary> <input mesh> [work dir]` runs the demo with
-its defaults and the CLI with the equivalent `-d -t 1 -v 2799 -S 1`, then compares the
-V/F counts, the output files byte for byte, and the M2 scorer's records for both. It
-needs the GUI build of the CLI (see `HANDOFF_M4_TASK1.md` for how it was built here).
+`compare_with_cli.sh [--no-weld] <"Instant Meshes" binary> <input mesh> [work dir]` runs the
+demo with its defaults and the CLI with the equivalent `-d -t 1 -v 2799 -S 1` on the
+mesh the demo welded (`--save-welded`), then compares the V/F counts, the output files
+byte for byte, and the M2 scorer's records for both. With `--no-weld` both get the raw
+input. It needs the GUI build of the CLI (see `HANDOFF_M4_TASK1.md` for how it was built
+here).
 
 ## Windows
 
