@@ -47,6 +47,11 @@ boundary-edge count (should land near the target's 242, not 9,512) as part of va
 the weld before using it for the sweep proper, and note the chosen tolerance and its
 justification in the handoff.
 
+> **Corrections from M3.1 (measured, 2026-10-13):**
+> - **The D6 boundary-edge numbers compare different things.** 9,512 is the boundary-edge count of M1's *remesh output* from the unwelded source; the unwelded `source.obj` itself has 20,392. Welding at tolerance 1e-5 gives a **closed** source (0 boundary edges, 0 non-manifold, 1 component), so the welded source does not "land near 242": it lands at 0. The comparable remesh output, with M1's exact params (`vertex_count=11082`, `smooth_iter=2`, crease off), has 0 boundary edges from the welded source and 9,512 from the unwelded one; the sweep's outputs have 0-264 (best: 52). The exit criterion is evidenced with both counts in `HANDOFF_M3_TASK1.md`.
+> - **The pure-quad anchor holds on the welded source too:** `vertex_count=2770` gave V=11,240, so the sweep calibrates the centre to 2,731 (= 2770 x 11082 / 11240), and Stage 1 multiplies the plan's {8000 ... 14000}/11082 ratios onto that.
+> - **Stage 2 is a finer grid**, not `scipy.optimize`: `vertex_count` integer, `smooth_iter` integer and a non-smooth response (neighbouring trials differ by ~0.005-0.01) make Nelder-Mead/Powell a poor fit; 5 x 5 x 4 trials run in ~6 min on 4 workers.
+
 - **Swept**: `vertex_count` (anchored near 11,082), `crease_angle` (off, 20°, 30°, 45°, 60°), `smooth_iter` (0, 1, 2, 4).
 - **Fixed**: `posy = 4`, `pure_quad = 1` (matches `quad-remeshed.obj`'s 100%-quad composition), `rosy = 4`.
 - **Always on**: `deterministic = 1` (see above).
